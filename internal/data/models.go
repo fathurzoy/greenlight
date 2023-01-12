@@ -17,10 +17,10 @@ type Models struct {
     }
 }
 
-// Create a helper function which returns a Models instance containing the mock models
-// only.
-func NewMockModels() Models {
-	return Models{
-			Movies: MockMovieModel{},
-	}
-}
+// // Create a helper function which returns a Models instance containing the mock models
+// // only.
+// func NewMockModels() Models {
+// 	return Models{
+// 			Movies: MockMovieModel{},
+// 	}
+// }
