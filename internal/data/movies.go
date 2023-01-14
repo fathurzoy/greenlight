@@ -1,6 +1,7 @@
 package data
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"time"
@@ -62,16 +63,22 @@ func (m MovieModel) Get(id int64) (*Movie, error) {
     if id < 1 {
         return nil, ErrRecordNotFound
     }
-    // Update the query to return pg_sleep(10) as the first value.
     query := `
         SELECT pg_sleep(10), id, created_at, title, year, runtime, genres, version
         FROM movies
         WHERE id = $1`
     var movie Movie
-    // Importantly, update the Scan() parameters so that the pg_sleep(10) return value
-    // is scanned into a []byte slice.
-    err := m.DB.QueryRow(query, id).Scan(
-        &[]byte{}, // Add this line.
+    // Use the context.WithTimeout() function to create a context.Context which carries a
+    // 3-second timeout deadline. Note that we're using the empty context.Background()
+    // as the 'parent' context.
+    ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+    // Importantly, use defer to make sure that we cancel the context before the Get()
+    // method returns.
+    defer cancel()
+    // Use the QueryRowContext() method to execute the query, passing in the context
+    // with the deadline as the first argument.
+    err := m.DB.QueryRowContext(ctx, query, id).Scan(
+        &[]byte{},
         &movie.ID,
         &movie.CreatedAt,
         &movie.Title,
@@ -90,6 +97,7 @@ func (m MovieModel) Get(id int64) (*Movie, error) {
     }
     return &movie, nil
 }
+
 func (m MovieModel) Update(movie *Movie) error {
     // Add the 'AND version = $6' clause to the SQL query.
     query := `
