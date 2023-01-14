@@ -59,26 +59,19 @@ func (m MovieModel) Insert(movie *Movie) error {
 }
 
 func (m MovieModel) Get(id int64) (*Movie, error) {
-    // The PostgreSQL bigserial type that we're using for the movie ID starts
-    // auto-incrementing at 1 by default, so we know that no movies will have ID values
-    // less than that. To avoid making an unnecessary database call, we take a shortcut
-    // and return an ErrRecordNotFound error straight away.
     if id < 1 {
         return nil, ErrRecordNotFound
     }
-    // Define the SQL query for retrieving the movie data.
+    // Update the query to return pg_sleep(10) as the first value.
     query := `
-        SELECT id, created_at, title, year, runtime, genres, version
+        SELECT pg_sleep(10), id, created_at, title, year, runtime, genres, version
         FROM movies
         WHERE id = $1`
-    // Declare a Movie struct to hold the data returned by the query.
     var movie Movie
-
-        // Execute the query using the QueryRow() method, passing in the provided id value 
-    // as a placeholder parameter, and scan the response data into the fields of the
-    // Movie struct. Importantly, notice that we need to convert the scan target for the
-    // genres column using the pq.Array() adapter function again.
+    // Importantly, update the Scan() parameters so that the pg_sleep(10) return value
+    // is scanned into a []byte slice.
     err := m.DB.QueryRow(query, id).Scan(
+        &[]byte{}, // Add this line.
         &movie.ID,
         &movie.CreatedAt,
         &movie.Title,
@@ -87,9 +80,6 @@ func (m MovieModel) Get(id int64) (*Movie, error) {
         pq.Array(&movie.Genres),
         &movie.Version,
     )
-    // Handle any errors. If there was no matching movie found, Scan() will return
-    // a sql.ErrNoRows error. We check for this and return our custom ErrRecordNotFound
-    // error instead.
     if err != nil {
         switch {
         case errors.Is(err, sql.ErrNoRows):
@@ -98,7 +88,6 @@ func (m MovieModel) Get(id int64) (*Movie, error) {
             return nil, err
         }
     }
-    // Otherwise, return a pointer to the Movie struct.
     return &movie, nil
 }
 func (m MovieModel) Update(movie *Movie) error {
