@@ -6,10 +6,10 @@ import (
 	"greenlight.alexedwards.net/internal/validator"
 )
 type Filters struct {
-    Page         int
-    PageSize     int
-    Sort         string
-    SortSafelist []string
+	Page         int
+	PageSize     int
+	Sort         string
+	SortSafelist []string
 }
 // Check that the client-provided Sort field matches one of the entries in our safelist
 // and if it does, extract the column name from the Sort field by stripping the leading
@@ -29,6 +29,13 @@ func (f Filters) sortDirection() string {
         return "DESC"
     }
     return "ASC"
+}
+
+func (f Filters) limit() int {
+	return f.PageSize
+}
+func (f Filters) offset() int {
+	return (f.Page - 1) * f.PageSize
 }
 
 func ValidateFilters(v *validator.Validator, f Filters) {
