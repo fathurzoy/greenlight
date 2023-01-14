@@ -6,7 +6,6 @@ import (
 	"github.com/julienschmidt/httprouter"
 )
 
-// Update the routes() method to return a http.Handler instead of a *httprouter.Router.
 func (app *application) routes() http.Handler {
     router := httprouter.New()
     router.NotFound = http.HandlerFunc(app.notFoundResponse)
@@ -17,6 +16,6 @@ func (app *application) routes() http.Handler {
     router.HandlerFunc(http.MethodGet, "/v1/movies/:id", app.showMovieHandler)
     router.HandlerFunc(http.MethodPatch, "/v1/movies/:id", app.updateMovieHandler)
     router.HandlerFunc(http.MethodDelete, "/v1/movies/:id", app.deleteMovieHandler)
-    // Wrap the router with the panic recovery middleware.
-    return app.recoverPanic(router)
+    // Wrap the router with the rateLimit() middleware.
+    return app.recoverPanic(app.rateLimit(router))
 }
