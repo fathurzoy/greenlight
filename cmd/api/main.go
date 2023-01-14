@@ -4,9 +4,6 @@ import (
 	"context"      // New import
 	"database/sql" // New import
 	"flag"
-	"fmt"
-	"log"
-	"net/http"
 	"os"
 	"time"
 
@@ -81,31 +78,16 @@ func main() {
 	// Likewise use the PrintInfo() method to write a message at the INFO level.
 	logger.PrintInfo("database connection pool established", nil)
 	app := &application{
-			config: cfg,
-			logger: logger,
-			models: data.NewModels(db),
+		config: cfg,
+		logger: logger,
+		models: data.NewModels(db),
 	}
-	srv := &http.Server{
-		Addr:         fmt.Sprintf(":%d", cfg.port),
-		Handler:      app.routes(),
-		// Create a new Go log.Logger instance with the log.New() function, passing in
-		// our custom Logger as the first parameter. The "" and 0 indicate that the
-		// log.Logger instance should not use a prefix or any flags.
-		ErrorLog:     log.New(logger, "", 0),
-		IdleTimeout:  time.Minute,
-		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 30 * time.Second,
-}
-	// Again, we use the PrintInfo() method to write a "starting server" message at the
-	// INFO level. But this time we pass a map containing additional properties (the
-	// operating environment and server address) as the final parameter.
-	logger.PrintInfo("starting server", map[string]string{
-			"addr": srv.Addr,
-			"env":  cfg.env,
-	})
-	err = srv.ListenAndServe()
-	// Use the PrintFatal() method to log the error and exit.
-	logger.PrintFatal(err, nil)
+	// Call app.serve() to start the server.
+	err = app.serve()
+	if err != nil {
+			logger.PrintFatal(err, nil)
+	}
+
 }
 
 func openDB(cfg config) (*sql.DB, error) {
