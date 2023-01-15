@@ -2,8 +2,8 @@ package main
 
 import (
 	"errors"
-	"fmt"
 	"net/http"
+	"time"
 
 	"greenlight.alexedwards.net/internal/data"
 	"greenlight.alexedwards.net/internal/validator"
@@ -44,72 +44,41 @@ func (app *application) registerUserHandler(w http.ResponseWriter, r *http.Reque
         app.failedValidationResponse(w, r, v.Errors)
         return
     }
-    // Insert the user data into the database.
-    err = app.models.Users.Insert(user)
-    if err != nil {
-        switch {
-        // If we get a ErrDuplicateEmail error, use the v.AddError() method to manually
-        // add a message to the validator instance, and then call our
-        // failedValidationResponse() helper.
-        case errors.Is(err, data.ErrDuplicateEmail):
-					v.AddError("email", "a user with this email address already exists")
-					app.failedValidationResponse(w, r, v.Errors)
-			default:
-					app.serverErrorResponse(w, r, err)
-			}
-			return
-	}
-	// Write a JSON response containing the user data along with a 201 Created status
-	// code.
-	err = app.writeJSON(w, http.StatusCreated, envelope{"user": user}, nil)
-	if err != nil {
-			app.serverErrorResponse(w, r, err)
-	}
-
-	  // Call the Send() method on our Mailer, passing in the user's email address,
-  // name of the template file, and the User struct containing the new user's data.
-  err = app.mailer.Send(user.Email, "user_welcome.tmpl", user)
-  if err != nil {
-      app.serverErrorResponse(w, r, err)
-      return
-  }
-  err = app.writeJSON(w, http.StatusCreated, envelope{"user": user}, nil)
-  if err != nil {
-      app.serverErrorResponse(w, r, err)
-  }
-
-	// Launch a background goroutine to send the welcome email.
-	go func() {
-		// Run a deferred function which uses recover() to catch any panic, and log an
-		// error message instead of terminating the application.
-		defer func() {
-				if err := recover(); err != nil {
-						app.logger.PrintError(fmt.Errorf("%s", err), nil)
+		err = app.models.Users.Insert(user)
+		if err != nil {
+				switch {
+				case errors.Is(err, data.ErrDuplicateEmail):
+						v.AddError("email", "a user with this email address already exists")
+						app.failedValidationResponse(w, r, v.Errors)
+				default:
+						app.serverErrorResponse(w, r, err)
 				}
-		}()
-		// Send the welcome email.
-		err = app.mailer.Send(user.Email, "user_welcome.tmpl", user)
-		if err != nil {
-				app.logger.PrintError(err, nil)
+				return
 		}
-	}()
-	err = app.writeJSON(w, http.StatusAccepted, envelope{"user": user}, nil)
-	if err != nil {
-			app.serverErrorResponse(w, r, err)
-	}
-
-	 // Use the background helper to execute an anonymous function that sends the welcome
-	// email.
-	app.background(func() {
-		err = app.mailer.Send(user.Email, "user_welcome.tmpl", user)
+		// After the user record has been created in the database, generate a new activation
+		// token for the user.
+		token, err := app.models.Tokens.New(user.ID, 3*24*time.Hour, data.ScopeActivation)
 		if err != nil {
-				app.logger.PrintError(err, nil)
+				app.serverErrorResponse(w, r, err)
+				return
 		}
-	})
-	err = app.writeJSON(w, http.StatusAccepted, envelope{"user": user}, nil)
-	if err != nil {
-		app.serverErrorResponse(w, r, err)
-	}
-
-
+		app.background(func() {
+				// As there are now multiple pieces of data that we want to pass to our email
+				// templates, we create a map to act as a 'holding structure' for the data. This
+				// contains the plaintext version of the activation token for the user, along
+				// with their ID.
+				data := map[string]interface{}{
+						"activationToken": token.Plaintext,
+						"userID":          user.ID,
+				}
+				// Send the welcome email, passing in the map above as dynamic data.
+				err = app.mailer.Send(user.Email, "user_welcome.tmpl", data)
+				if err != nil {
+						app.logger.PrintError(err, nil)
+				}
+		})
+		err = app.writeJSON(w, http.StatusAccepted, envelope{"user": user}, nil)
+		if err != nil {
+				app.serverErrorResponse(w, r, err)
+		}
 }
